@@ -1,0 +1,6 @@
+@AiDevs2Reloaded.Api_HostAddress = http://localhost:5097
+
+GET {{AiDevs2Reloaded.Api_HostAddress}}/helloapi/
+Accept: application/json
+
+###
