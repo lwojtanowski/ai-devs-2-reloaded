@@ -4,3 +4,6 @@ GET {{AiDevs2Reloaded.Api_HostAddress}}/helloapi/
 Accept: application/json
 
 ###
+
+GET {{AiDevs2Reloaded.Api_HostAddress}}/all/
+Accept: application/json

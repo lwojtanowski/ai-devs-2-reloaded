@@ -1,4 +1,5 @@
-﻿using AiDevs2Reloaded.Api.HttpClients.Abstractions;
+﻿using AiDevs2Reloaded.Api.Contracts.AiDevs;
+using AiDevs2Reloaded.Api.HttpClients.Abstractions;
 
 namespace AiDevs2Reloaded.Api.Modules;
 
