@@ -5,5 +5,12 @@ Accept: application/json
 
 ###
 
-GET {{AiDevs2Reloaded.Api_HostAddress}}/all/
+GET {{AiDevs2Reloaded.Api_HostAddress}}/moderate/
 Accept: application/json
+
+###
+
+GET {{AiDevs2Reloaded.Api_HostAddress}}/blogger/
+Accept: application/json
+
+###

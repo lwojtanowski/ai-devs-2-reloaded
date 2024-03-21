@@ -1,5 +1,5 @@
 ﻿using AiDevs2Reloaded.Api.Configurations;
-using AiDevs2Reloaded.Api.Contracts.AiDevs;
+using AiDevs2Reloaded.Api.Contracts.AIDevs;
 using AiDevs2Reloaded.Api.Exceptions;
 using AiDevs2Reloaded.Api.HttpClients;
 using FluentAssertions;
@@ -33,7 +33,7 @@ public class TasksAiDevsClientTests
     {
         // Arrange
         var token = "testToken";
-        var taskResponse = new TaskResponse(0, "Test Task", "aidevs_123");
+        var taskResponse = new TaskResponse(0, "Test Task", "aidevs_123", null, null);
 
         _mockHttpMessageHandler
             .When($"{_options.Value.BaseUrl}/task/{token}")

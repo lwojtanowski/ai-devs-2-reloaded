@@ -1,5 +1,5 @@
 ﻿using AiDevs2Reloaded.Api.Configurations;
-using AiDevs2Reloaded.Api.Contracts.AiDevs;
+using AiDevs2Reloaded.Api.Contracts.AIDevs;
 using AiDevs2Reloaded.Api.Exceptions;
 using AiDevs2Reloaded.Api.HttpClients.Abstractions;
 using Microsoft.Extensions.Options;
@@ -78,14 +78,13 @@ public class TasksAiDevsClient : ITasksAiDevsClient
         throw new MissingTokenException();
     }
 
-    public async Task<AnswerResponse> SendAnswerAsync(string token, string answer, CancellationToken cancellationToken = default)
+    public async Task<AnswerResponse> SendAnswerAsync<T>(string token, T answer, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(token);
-        ArgumentException.ThrowIfNullOrWhiteSpace(answer);
 
         Uri uri = new($"answer/{token}", UriKind.Relative);
 
-        AnswerRequest request = new(answer);
+        AnswerRequest<T> request = new(answer);
 
         try
         {

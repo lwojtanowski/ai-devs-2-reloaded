@@ -1,4 +1,4 @@
-using AiDevs2Reloaded.Api.Contracts.AiDevs;
+using AiDevs2Reloaded.Api.Contracts.AIDevs;
 using AiDevs2Reloaded.Api.Exceptions;
 using AiDevs2Reloaded.Api.HttpClients.Abstractions;
 using AiDevs2Reloaded.Api.Modules;
@@ -7,6 +7,7 @@ using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 
 namespace AiDevs2Reloaded.Api.UnitTests.Modules;
+
 public class HelloApiTaskTests
 {
     [Fact]
@@ -15,7 +16,7 @@ public class HelloApiTaskTests
         // Arrange
         var tasksAiDevsClient = Substitute.For<ITasksAiDevsClient>();
         var token = "testToken";
-        var taskResponse = new TaskResponse(0, "please return value of \"cookie\" field as answer", "aidevs_0dabc7da");
+        var taskResponse = new TaskResponse(0, "please return value of \"cookie\" field as answer", "aidevs_0dabc7da", null, null);
         var response = new AnswerResponse(0, "OK", "CORRECT");
 
         tasksAiDevsClient.GetTokenAsync("helloapi", Arg.Any<CancellationToken>()).Returns(token);
@@ -68,7 +69,7 @@ public class HelloApiTaskTests
         // Arrange
         var tasksAiDevsClient = Substitute.For<ITasksAiDevsClient>();
         var token = "testToken";
-        var taskResponse = new TaskResponse(0, "please return value of \"cookie\" field as answer", "aidevs_0dabc7da");
+        var taskResponse = new TaskResponse(0, "please return value of \"cookie\" field as answer", "aidevs_0dabc7da", null, null);
 
         tasksAiDevsClient.GetTokenAsync("helloapi", Arg.Any<CancellationToken>()).Returns(token);
         tasksAiDevsClient.GetTaskAsync(token, Arg.Any<CancellationToken>()).Returns(taskResponse);

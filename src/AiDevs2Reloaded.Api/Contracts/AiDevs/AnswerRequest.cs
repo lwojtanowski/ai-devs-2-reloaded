@@ -1,5 +1,5 @@
-﻿namespace AiDevs2Reloaded.Api.Contracts.AiDevs;
+﻿namespace AiDevs2Reloaded.Api.Contracts.AIDevs;
 
-public sealed record AnswerRequest(string answer)
+public sealed record AnswerRequest<T>(T answer)
 {
 }
