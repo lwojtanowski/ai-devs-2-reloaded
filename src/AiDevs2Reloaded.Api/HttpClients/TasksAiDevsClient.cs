@@ -4,6 +4,7 @@ using AiDevs2Reloaded.Api.Exceptions;
 using AiDevs2Reloaded.Api.HttpClients.Abstractions;
 using Microsoft.Extensions.Options;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace AiDevs2Reloaded.Api.HttpClients;
 
@@ -38,6 +39,38 @@ public class TasksAiDevsClient : ITasksAiDevsClient
                 var content = await response.Content.ReadAsStringAsync(cancellationToken);
                 _logger.LogInformation("Response from {AddressUri}: {Response}", uri, content);
                 TaskResponse tokenResponse = JsonSerializer.Deserialize<TaskResponse>(content, _jsonSerializerOptions)!;
+                return tokenResponse;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error while getting token");
+            throw;
+        }
+
+        throw new MissingTaskException();
+    }
+
+    public async Task<dynamic> GetTaskAsync(string token, IEnumerable<KeyValuePair<string, string>> body, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(token);
+
+        Uri uri = new($"task/{token}", UriKind.Relative);
+
+        var formDataContent = new FormUrlEncodedContent(body);
+
+        try
+        {
+            var response = await _httpClient.PostAsync(uri, formDataContent, cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsStringAsync(cancellationToken);
+                _logger.LogInformation("Response from {AddressUri}: {Response}", uri, content);
+                var tokenResponse = JsonSerializer.Deserialize<dynamic>(content, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true,
+                    UnknownTypeHandling = JsonUnknownTypeHandling.JsonNode,
+                })!;
                 return tokenResponse;
             }
         }

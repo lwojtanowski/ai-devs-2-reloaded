@@ -1,5 +1,6 @@
 ﻿using AiDevs2Reloaded.Api.HttpClients.Abstractions;
 using AiDevs2Reloaded.Api.Services.Abstractions;
+using System.Text.Json.Nodes;
 
 namespace AiDevs2Reloaded.Api.Modules;
 
@@ -18,6 +19,10 @@ internal static class TaskModule
 
         app.MapGet("/blogger", async (IOpenAIService service, ITasksAiDevsClient client, CancellationToken ct) => await BloggerTaskAsync(service, client, ct))
             .WithName("blogger")
+            .WithOpenApi();
+
+        app.MapGet("/liar", async (IOpenAIService service, ITasksAiDevsClient client, CancellationToken ct) => await LiarTaskAsync(service, client, ct))
+            .WithName("liar")
             .WithOpenApi();
     }
 
@@ -70,6 +75,25 @@ internal static class TaskModule
         var chapters = string.Join(", ", task.Blog!);
         var input = "Write a blog post about pizza margherita with the following chapters: " + chapters;
         var result = await service.GenerateBlogPostAsync(input, linkedCts.Token);
+        var response = await client.SendAnswerAsync(token, result, linkedCts.Token);
+        return Results.Ok(response);
+    }
+
+    internal static async Task<IResult> LiarTaskAsync(IOpenAIService service, ITasksAiDevsClient client, CancellationToken cancellationToken)
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cts.Token);
+
+        var token = await client.GetTokenAsync("liar", linkedCts.Token);
+        var question = "What is capital of Poland?";
+        var body = new List<KeyValuePair<string, string>>
+        {
+           new("question", question)
+        };
+
+        JsonObject task = await client.GetTaskAsync(token, body, linkedCts.Token);
+        task.TryGetPropertyValue("answer", out var answer);
+        var result = await service.VerifyAsync($"{question} {answer}", linkedCts.Token);
         var response = await client.SendAnswerAsync(token, result, linkedCts.Token);
         return Results.Ok(response);
     }
