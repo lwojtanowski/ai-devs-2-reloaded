@@ -26,9 +26,8 @@ public class OpenAIModerationClient : IOpenAIModerationClient
         _logger = logger;
     }
 
-    public async Task<ModerationResponse> CheckContentAsync(string input, CancellationToken cancellationToken = default)
+    public async Task<ModerationResponse> CheckContentAsync(List<string> input, CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(input);
         ArgumentException.ThrowIfNullOrWhiteSpace(_options.ApiKey);
 
         Uri uri = new($"{_apiVersion}/moderations", UriKind.Relative);

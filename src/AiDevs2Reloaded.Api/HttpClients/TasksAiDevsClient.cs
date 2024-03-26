@@ -51,13 +51,13 @@ public class TasksAiDevsClient : ITasksAiDevsClient
         throw new MissingTaskException();
     }
 
-    public async Task<dynamic> GetTaskAsync(string token, IEnumerable<KeyValuePair<string, string>> body, CancellationToken cancellationToken = default)
+    public async Task<dynamic> GetTaskAsync(string token, IEnumerable<KeyValuePair<string, string>>? body, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(token);
 
         Uri uri = new($"task/{token}", UriKind.Relative);
 
-        var formDataContent = new FormUrlEncodedContent(body);
+        var formDataContent = new FormUrlEncodedContent(body ?? Enumerable.Empty<KeyValuePair<string, string>>());
 
         try
         {

@@ -4,5 +4,5 @@ namespace AiDevs2Reloaded.Api.HttpClients.Abstractions;
 
 public interface IOpenAIModerationClient
 {
-    Task<ModerationResponse> CheckContentAsync(string input, CancellationToken cancellationToken = default);
+    Task<ModerationResponse> CheckContentAsync(List<string> input, CancellationToken cancellationToken = default);
 }

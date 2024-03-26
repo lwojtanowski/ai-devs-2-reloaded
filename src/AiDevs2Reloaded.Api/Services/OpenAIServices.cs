@@ -23,6 +23,46 @@ public class OpenAIServices : IOpenAIService
         _logger = logger;
     }
 
+    public async Task<string> GenerateAnswerAsync(string input, string context, CancellationToken cancellationToken = default)
+    {
+        var client = new OpenAIClient(_options.ApiKey);
+        var systemPromptBuilder = new StringBuilder();
+        systemPromptBuilder.AppendLine("Use only information from context");
+        systemPromptBuilder.AppendLine("context ###");
+        systemPromptBuilder.AppendLine(context);
+        systemPromptBuilder.AppendLine("###");
+
+        List<ChatRequestMessage> messages = new()
+        {
+             new ChatRequestSystemMessage(systemPromptBuilder.ToString()),
+             new ChatRequestUserMessage(input)
+        };
+
+        var chatCompletionsOptions = new ChatCompletionsOptions("gpt-3.5-turbo", messages);
+
+        try
+        {
+            var response = await client.GetChatCompletionsAsync(chatCompletionsOptions, cancellationToken);
+            if (response.HasValue)
+            {
+                var message = response.Value.Choices
+                    .Select(x => x.Message)
+                    .Where(m => m.Role == ChatRole.Assistant)
+                    .Select(m => m.Content)
+                    .FirstOrDefault();
+
+                return message!;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error while retriving response from OpenAI");
+            throw;
+        }
+
+        throw new BlogPostGenerationException();
+    }
+
     public async Task<List<string>> GenerateBlogPostAsync(string input, CancellationToken cancellationToken = default)
     {
         var client = new OpenAIClient(_options.ApiKey);

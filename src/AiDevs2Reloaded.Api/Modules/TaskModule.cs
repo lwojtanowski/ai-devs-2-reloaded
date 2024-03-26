@@ -1,6 +1,7 @@
 ﻿using AiDevs2Reloaded.Api.HttpClients.Abstractions;
 using AiDevs2Reloaded.Api.Services.Abstractions;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 
 namespace AiDevs2Reloaded.Api.Modules;
 
@@ -23,6 +24,10 @@ internal static class TaskModule
 
         app.MapGet("/liar", async (IOpenAIService service, ITasksAiDevsClient client, CancellationToken ct) => await LiarTaskAsync(service, client, ct))
             .WithName("liar")
+            .WithOpenApi();
+
+        app.MapGet("/inprompt", async (IOpenAIService service, ITasksAiDevsClient client, CancellationToken ct) => await InpromptTaskAsync(service, client, ct))
+            .WithName("inprompt")
             .WithOpenApi();
     }
 
@@ -47,19 +52,11 @@ internal static class TaskModule
 
         var token = await client.GetTokenAsync("moderation", linkedCts.Token);
         var task = await client.GetTaskAsync(token, linkedCts.Token);
+        var moderationResponse = await openAIModClient.CheckContentAsync(task.Input!, linkedCts.Token);
 
-#pragma warning disable S125
-        //Normally we would use Task.WhenAll to run all the tasks in parallel but I assume we need responses in order
-        //var results = await Task.WhenAll(tasks);
-
-        var results = new List<int>();
-
-        foreach (var input in task.Input!)
-        {
-            var moderationResponse = await openAIModClient.CheckContentAsync(input, linkedCts.Token);
-            results.Add(moderationResponse.Results.Any(x => x.Flagged) ? 1 : 0);
-        }
-#pragma warning restore S125
+        var results = moderationResponse.Results
+            .Select(x => x.Flagged ? 1 : 0)
+            .ToList();
 
         var response = await client.SendAnswerAsync(token, results, linkedCts.Token);
         return Results.Ok(response);
@@ -95,6 +92,40 @@ internal static class TaskModule
         task.TryGetPropertyValue("answer", out var answer);
         var result = await service.VerifyAsync($"{question} {answer}", linkedCts.Token);
         var response = await client.SendAnswerAsync(token, result, linkedCts.Token);
+        return Results.Ok(response);
+    }
+
+    internal static async Task<IResult> InpromptTaskAsync(IOpenAIService service, ITasksAiDevsClient client, CancellationToken cancellationToken)
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cts.Token);
+
+        var token = await client.GetTokenAsync("inprompt", linkedCts.Token);
+        JsonObject task = await client.GetTaskAsync(token, null, linkedCts.Token);
+        task.TryGetPropertyValue("input", out var input);
+
+        var data = input!
+            .AsArray()
+            .Select(x => x!.GetValue<string>())
+            .GroupBy(x => new Regex(@"^\s*\w+").Match(x).Value, x => x);
+
+        task.TryGetPropertyValue("question", out var question);
+        var name = new Regex(@"\w+(?=[.!?]?\s*$)").Match(question!.GetValue<string>()).Value;
+        var userData = data.SingleOrDefault(x => x.Key.Equals(name, StringComparison.OrdinalIgnoreCase));
+
+        if (userData is null)
+        {
+            throw new InvalidOperationException("User data not found");
+        }
+
+        var context = string.Join("; ", userData);
+
+        //If you want save some monay just use this:
+        //var response = await client.SendAnswerAsync(token, context, linkedCts.Token);
+        //return Results.Ok(response);
+
+        var answer = await service.GenerateAnswerAsync(question!.GetValue<string>(), context, linkedCts.Token);
+        var response = await client.SendAnswerAsync(token, answer, linkedCts.Token);
         return Results.Ok(response);
     }
 }
