@@ -148,6 +148,32 @@ public class OpenAIServices : IOpenAIService
 
         throw new BlogPostGenerationException();
     }
+
+    public async Task<ReadOnlyMemory<float>> EmbeddingAsync(string input, CancellationToken cancellationToken = default)
+    {
+        var client = new OpenAIClient(_options.ApiKey);
+        EmbeddingsOptions embeddingsOptions = new()
+        {
+            DeploymentName = "text-embedding-ada-002",
+            Input = { input },
+        };
+
+        try
+        {
+            var response = await client.GetEmbeddingsAsync(embeddingsOptions, cancellationToken);
+            EmbeddingItem item = response.Value.Data[0];
+            ReadOnlyMemory<float> embedding = item.Embedding;
+            return embedding;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error while retriving response from OpenAI");
+            throw;
+        }
+
+        throw new MissingEmbeddingException();
+
+    }
 }
 
 public sealed record BloggerResponse(List<string> Chapters);

@@ -29,6 +29,10 @@ internal static class TaskModule
         app.MapGet("/inprompt", async (IOpenAIService service, ITasksAiDevsClient client, CancellationToken ct) => await InpromptTaskAsync(service, client, ct))
             .WithName("inprompt")
             .WithOpenApi();
+
+        app.MapGet("/embedding", async (IOpenAIService service, ITasksAiDevsClient client, CancellationToken ct) => await EmbeddingTaskAsync(service, client, ct))
+            .WithName("embedding")
+            .WithOpenApi();
     }
 
     internal static async Task<IResult> HelloApiTaskAsync(ITasksAiDevsClient client, CancellationToken cancellationToken = default)
@@ -125,6 +129,17 @@ internal static class TaskModule
         //return Results.Ok(response);
 
         var answer = await service.GenerateAnswerAsync(question!.GetValue<string>(), context, linkedCts.Token);
+        var response = await client.SendAnswerAsync(token, answer, linkedCts.Token);
+        return Results.Ok(response);
+    }
+
+    internal static async Task<IResult> EmbeddingTaskAsync(IOpenAIService service, ITasksAiDevsClient client, CancellationToken cancellationToken)
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cts.Token);
+
+        var token = await client.GetTokenAsync("embedding", linkedCts.Token);
+        var answer = await service.EmbeddingAsync("Hawaiian pizza", linkedCts.Token);
         var response = await client.SendAnswerAsync(token, answer, linkedCts.Token);
         return Results.Ok(response);
     }
