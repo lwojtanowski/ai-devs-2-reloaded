@@ -1,5 +1,6 @@
 ﻿using AiDevs2Reloaded.Api.HttpClients.Abstractions;
 using AiDevs2Reloaded.Api.Services.Abstractions;
+using System.Runtime.Intrinsics.X86;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
@@ -32,6 +33,10 @@ internal static class TaskModule
 
         app.MapGet("/embedding", async (IOpenAIService service, ITasksAiDevsClient client, CancellationToken ct) => await EmbeddingTaskAsync(service, client, ct))
             .WithName("embedding")
+            .WithOpenApi();
+
+        app.MapGet("/whisper", async (IOpenAIService service, ITasksAiDevsClient client, CancellationToken ct) => await WhisperTaskAsync(service, client, ct))
+            .WithName("whisper")
             .WithOpenApi();
     }
 
@@ -141,6 +146,25 @@ internal static class TaskModule
         var token = await client.GetTokenAsync("embedding", linkedCts.Token);
         var answer = await service.EmbeddingAsync("Hawaiian pizza", linkedCts.Token);
         var response = await client.SendAnswerAsync(token, answer, linkedCts.Token);
+        return Results.Ok(response);
+    }
+
+    internal static async Task<IResult> WhisperTaskAsync(IOpenAIService service, ITasksAiDevsClient client, CancellationToken cancellationToken)
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cts.Token);
+
+        var token = await client.GetTokenAsync("whisper", linkedCts.Token);
+        var task = await client.GetTaskAsync(token, linkedCts.Token);
+
+        // If you want save some monay just use this:
+        //var url = "https://tasks.aidevs.pl/data/mateusz.mp3";
+        var url = await service.GenerateAnswerAsync(task.Msg, "In user input you will find URL (start with https). Return this url", linkedCts.Token);
+
+        using var stream = await client.GetFileAsync(url, linkedCts.Token);
+
+        var transcription = await service.AudioToSpeechAsync(stream, linkedCts.Token);
+        var response = await client.SendAnswerAsync(token, transcription, linkedCts.Token);
         return Results.Ok(response);
     }
 }

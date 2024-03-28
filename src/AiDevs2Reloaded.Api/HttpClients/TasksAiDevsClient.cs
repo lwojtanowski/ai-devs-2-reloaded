@@ -3,6 +3,7 @@ using AiDevs2Reloaded.Api.Contracts.AIDevs;
 using AiDevs2Reloaded.Api.Exceptions;
 using AiDevs2Reloaded.Api.HttpClients.Abstractions;
 using Microsoft.Extensions.Options;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -137,5 +138,13 @@ public class TasksAiDevsClient : ITasksAiDevsClient
         }
 
         throw new MissingAnswerException();
+    }
+
+    public async Task<Stream> GetFileAsync(string url, CancellationToken cancellationToken = default)
+    {
+        var response = await _httpClient.GetAsync(url, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        return stream;
     }
 }

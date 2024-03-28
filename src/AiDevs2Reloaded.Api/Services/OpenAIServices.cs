@@ -172,7 +172,36 @@ public class OpenAIServices : IOpenAIService
         }
 
         throw new MissingEmbeddingException();
+    }
 
+    public async Task<string> AudioToSpeechAsync(Stream stream, CancellationToken cancellationToken = default)
+    {
+        var client = new OpenAIClient(_options.ApiKey);
+
+        var transcriptionOptions = new AudioTranscriptionOptions()
+        {
+            DeploymentName = "whisper-1",
+            AudioData = BinaryData.FromStream(stream),
+            ResponseFormat = AudioTranscriptionFormat.Verbose,
+        };
+
+        try
+        {
+            var response = await client.GetAudioTranscriptionAsync(transcriptionOptions, cancellationToken);
+            return response.Value.Text;
+        } 
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error while retriving response from OpenAI");
+            throw;
+        }
+        
+        throw new MissingTranscriptionException();
+    }
+
+    public Task<string> ExecuteTaskAsync(string context, string input, CancellationToken cancellationToken = default)
+    {
+        throw new NotImplementedException();
     }
 }
 
