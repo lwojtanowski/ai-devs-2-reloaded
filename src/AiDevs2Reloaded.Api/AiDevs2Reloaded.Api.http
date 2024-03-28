@@ -19,3 +19,18 @@ GET {{AiDevs2Reloaded.Api_HostAddress}}/liar/
 Accept: application/json
 
 ###
+
+GET {{AiDevs2Reloaded.Api_HostAddress}}/inprompt/
+Accept: application/json
+
+###
+
+GET {{AiDevs2Reloaded.Api_HostAddress}}/embedding/
+Accept: application/json
+
+###
+
+GET {{AiDevs2Reloaded.Api_HostAddress}}/whisper/
+Accept: application/json
+
+###
