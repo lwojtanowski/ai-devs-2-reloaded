@@ -1,4 +1,6 @@
-﻿namespace AiDevs2Reloaded.Api.Services.Abstractions;
+﻿using Azure.AI.OpenAI;
+
+namespace AiDevs2Reloaded.Api.Services.Abstractions;
 
 public interface IOpenAIService
 {
@@ -7,4 +9,5 @@ public interface IOpenAIService
     Task<string> GenerateAnswerAsync(string input, string context, CancellationToken cancellationToken = default);
     Task<ReadOnlyMemory<float>> EmbeddingAsync(string input, CancellationToken cancellationToken = default);
     Task<string> AudioToSpeechAsync(Stream stream, CancellationToken cancellationToken = default);
+    Task<string> AddUserAsync(string input, CancellationToken cancellationToken = default);
 }

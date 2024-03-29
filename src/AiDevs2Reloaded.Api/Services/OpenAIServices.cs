@@ -199,10 +199,105 @@ public class OpenAIServices : IOpenAIService
         throw new MissingTranscriptionException();
     }
 
-    public Task<string> ExecuteTaskAsync(string context, string input, CancellationToken cancellationToken = default)
+    public async Task<string> AddUserAsync(string input, CancellationToken cancellationToken = default)
     {
+        var client = new OpenAIClient(_options.ApiKey);
+        var systemPromptBuilder = new StringBuilder();
+        systemPromptBuilder.AppendLine("You are a System");
+        systemPromptBuilder.AppendLine("If user provaid his data add him to system");
+        systemPromptBuilder.AppendLine("User must provide his name, surname and year of bright");
+        systemPromptBuilder.AppendLine("Valid JSON {\"name\":\"name(first name of user\",\"surname\":\"surname(last name of user\",\"year\":1980(user year of bright)}");
+
+        List<ChatRequestMessage> messages = new()
+        {
+             new ChatRequestSystemMessage(systemPromptBuilder.ToString()),
+             new ChatRequestUserMessage(input)
+        };
+
+        var chatCompletionsOptions = new ChatCompletionsOptions("gpt-3.5-turbo-0613", messages);
+        var addUserFunction = GetAddUserFunctionDefinition();
+        chatCompletionsOptions.Functions.Add(addUserFunction);
+
+        var response = await client.GetChatCompletionsAsync(chatCompletionsOptions, cancellationToken);
+
+        if (response.HasValue)
+        {
+            var choice = response.Value.Choices[0];
+            if (choice.FinishReason == CompletionsFinishReason.FunctionCall)
+            {
+                messages.Add(new ChatRequestAssistantMessage(choice.Message.Content)
+                {
+                    FunctionCall = choice.Message.FunctionCall,
+                });
+
+                if (choice.Message.FunctionCall.Name.Equals(addUserFunction.Name, StringComparison.OrdinalIgnoreCase))
+                {
+                    string unvalidatedArguments = choice.Message.FunctionCall.Arguments;
+                    var addUserRequest = JsonSerializer.Deserialize<AddUserRequest>(unvalidatedArguments, _jsonSerializerOptions)!;
+
+                    var functionResultData = AddUserFunctionResultData(addUserRequest);
+                    var functionResponseMessage = new ChatRequestFunctionMessage(
+                        name: choice.Message.FunctionCall.Name,
+                        content: JsonSerializer.Serialize(
+                            functionResultData,
+                            new JsonSerializerOptions() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
+
+                    messages.Add(functionResponseMessage);
+
+                    var successChatCompletionsOptions = new ChatCompletionsOptions("gpt-3.5-turbo-0613", messages);
+                    var successResponse = await client.GetChatCompletionsAsync(successChatCompletionsOptions, cancellationToken);
+                    return successResponse.Value.Choices[0].Message.Content;
+                }
+            }
+        }
+
         throw new NotImplementedException();
+    }
+
+    private FunctionDefinition GetAddUserFunctionDefinition()
+    {
+        var function = new FunctionDefinition
+        {
+            Name = "addUser",
+            Description = "Add user to the system",
+            Parameters = BinaryData.FromObjectAsJson(
+                new 
+                {
+                    Type = "object",
+                    Properties = new
+                    {
+                        Name = new
+                        {
+                            Type = "string",
+                            Description = "provide first name of the user",
+                        },
+                        Surname = new
+                        {
+                            Type = "string",
+                            Description = "provide last name of the user",
+                        },
+                        Year = new
+                        {
+                            Type = "integer",
+                            Description = "provide year of birth of the user",
+                        }
+                    },
+                    Required = new[] { "Name", "Surname", "Year" }
+                }, 
+                new JsonSerializerOptions() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })
+        };
+
+        return function;
+    }
+    
+    private string AddUserFunctionResultData(AddUserRequest request)
+    {
+        var message = $"User {request.Name} {request.Surname} born in {request.Year} has been added to the system";
+        _logger.LogInformation(message);
+        return message;
     }
 }
 
 public sealed record BloggerResponse(List<string> Chapters);
+
+public sealed record AddUserRequest(string Name, string Surname, int Year);

@@ -1,6 +1,5 @@
 ﻿using AiDevs2Reloaded.Api.HttpClients.Abstractions;
 using AiDevs2Reloaded.Api.Services.Abstractions;
-using System.Runtime.Intrinsics.X86;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
@@ -12,31 +11,43 @@ internal static class TaskModule
     {
         app.MapGet("/helloapi", async (ITasksAiDevsClient client, CancellationToken ct) => await HelloApiTaskAsync(client, ct))
             .WithName("helloapi")
+            .WithTags("AI Devs 2 Tasks")
             .WithOpenApi();
 
         app.MapGet("/moderate", async (ITasksAiDevsClient client, IOpenAIModerationClient openAIModClient, CancellationToken ct) =>
             await ModerateTaskAsync(client, openAIModClient, ct))
             .WithName("moderate")
+            .WithTags("AI Devs 2 Tasks")
             .WithOpenApi();
 
         app.MapGet("/blogger", async (IOpenAIService service, ITasksAiDevsClient client, CancellationToken ct) => await BloggerTaskAsync(service, client, ct))
             .WithName("blogger")
+            .WithTags("AI Devs 2 Tasks")
             .WithOpenApi();
 
         app.MapGet("/liar", async (IOpenAIService service, ITasksAiDevsClient client, CancellationToken ct) => await LiarTaskAsync(service, client, ct))
             .WithName("liar")
+            .WithTags("AI Devs 2 Tasks")
             .WithOpenApi();
 
         app.MapGet("/inprompt", async (IOpenAIService service, ITasksAiDevsClient client, CancellationToken ct) => await InpromptTaskAsync(service, client, ct))
             .WithName("inprompt")
+            .WithTags("AI Devs 2 Tasks")
             .WithOpenApi();
 
         app.MapGet("/embedding", async (IOpenAIService service, ITasksAiDevsClient client, CancellationToken ct) => await EmbeddingTaskAsync(service, client, ct))
             .WithName("embedding")
+            .WithTags("AI Devs 2 Tasks")
             .WithOpenApi();
 
         app.MapGet("/whisper", async (IOpenAIService service, ITasksAiDevsClient client, CancellationToken ct) => await WhisperTaskAsync(service, client, ct))
             .WithName("whisper")
+            .WithTags("AI Devs 2 Tasks")
+            .WithOpenApi();
+
+        app.MapGet("/functions", async (IOpenAIService service, ITasksAiDevsClient client, CancellationToken ct) => await FunctionsTaskAsync(service, client, ct))
+            .WithName("functions")
+            .WithTags("AI Devs 2 Tasks")
             .WithOpenApi();
     }
 
@@ -165,6 +176,46 @@ internal static class TaskModule
 
         var transcription = await service.AudioToSpeechAsync(stream, linkedCts.Token);
         var response = await client.SendAnswerAsync(token, transcription, linkedCts.Token);
+        return Results.Ok(response);
+    }
+
+    internal static async Task<IResult> FunctionsTaskAsync(IOpenAIService service, ITasksAiDevsClient client, CancellationToken cancellationToken)
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cts.Token);
+
+        var token = await client.GetTokenAsync("functions", linkedCts.Token);
+
+        var function = new
+        {
+            name = "addUser",
+            description = "Add user to the system",
+            parameters = new
+            {
+                type = "object",
+                properties = new
+                {
+                    name = new
+                    {
+                        type = "string",
+                        description = "provide first name of the user"
+                    },
+                    surname = new
+                    {
+                        type = "string",
+                        description = "provide last name of the user"
+                    },
+                    year = new
+                    {
+                        type = "integer",
+                        description = "provide year of birth of the user"
+                    }
+                }
+            },
+            required = new[] { "name", "surname", "year" }
+        };
+
+        var response = await client.SendAnswerAsync(token, function, linkedCts.Token);
         return Results.Ok(response);
     }
 }
