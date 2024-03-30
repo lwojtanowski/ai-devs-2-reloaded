@@ -130,6 +130,11 @@ public class TasksAiDevsClient : ITasksAiDevsClient
                 AnswerResponse answerResponse = JsonSerializer.Deserialize<AnswerResponse>(content, _jsonSerializerOptions)!;
                 return answerResponse;
             }
+            else
+            {
+                var content = await response.Content.ReadAsStringAsync(cancellationToken);
+                _logger.LogError("Response from {AddressUri}: {Response}", uri, content);
+            }
         }
         catch (Exception ex)
         {

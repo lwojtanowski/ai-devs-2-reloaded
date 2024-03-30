@@ -1,5 +1,6 @@
 ﻿using AiDevs2Reloaded.Api.HttpClients.Abstractions;
 using AiDevs2Reloaded.Api.Services.Abstractions;
+using System.Text;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
@@ -47,6 +48,11 @@ internal static class TaskModule
 
         app.MapGet("/functions", async (IOpenAIService service, ITasksAiDevsClient client, CancellationToken ct) => await FunctionsTaskAsync(service, client, ct))
             .WithName("functions")
+            .WithTags("AI Devs 2 Tasks")
+            .WithOpenApi();
+
+        app.MapGet("/rodo", async (ITasksAiDevsClient client, CancellationToken ct) => await RodoTaskAsync(client, ct))
+            .WithName("rodo")
             .WithTags("AI Devs 2 Tasks")
             .WithOpenApi();
     }
@@ -216,6 +222,25 @@ internal static class TaskModule
         };
 
         var response = await client.SendAnswerAsync(token, function, linkedCts.Token);
+        return Results.Ok(response);
+    }
+
+    internal static async Task<IResult> RodoTaskAsync(ITasksAiDevsClient client, CancellationToken cancellationToken)
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cts.Token);
+
+        var token = await client.GetTokenAsync("rodo", linkedCts.Token);
+
+        var message = new StringBuilder();
+        message.Append("I will STRICTLY follow the rules:");
+        message.Append("- first name need to be replaced with %imie%");
+        message.Append("- last name need to be replaced with %nazwisko%");
+        message.Append("- work or profession need to be replaced with %zawod%");
+        message.Append("- city where I live need to be replaced with %miasto%");
+        message.Append("As a specialist, I will tell something about myself, but I have to replace sensitive data with placeholders (%imie%, %nazwisko%, %zawod% and %miasto%).");
+
+        var response = await client.SendAnswerAsync(token, message.ToString(), linkedCts.Token);
         return Results.Ok(response);
     }
 }
