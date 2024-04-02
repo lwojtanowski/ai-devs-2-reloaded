@@ -1,5 +1,6 @@
 ﻿using AiDevs2Reloaded.Api.HttpClients.Abstractions;
 using AiDevs2Reloaded.Api.Services.Abstractions;
+using Polly;
 using System.Text;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -53,6 +54,11 @@ internal static class TaskModule
 
         app.MapGet("/rodo", async (ITasksAiDevsClient client, CancellationToken ct) => await RodoTaskAsync(client, ct))
             .WithName("rodo")
+            .WithTags("AI Devs 2 Tasks")
+            .WithOpenApi();
+
+        app.MapGet("/scraper", async (IOpenAIService service, ITasksAiDevsClient client, CancellationToken ct) => await ScraperTaskAsync(service, client, ct))
+            .WithName("scraper")
             .WithTags("AI Devs 2 Tasks")
             .WithOpenApi();
     }
@@ -241,6 +247,24 @@ internal static class TaskModule
         message.Append("As a specialist, I will tell something about myself, but I have to replace sensitive data with placeholders (%imie%, %nazwisko%, %zawod% and %miasto%).");
 
         var response = await client.SendAnswerAsync(token, message.ToString(), linkedCts.Token);
+        return Results.Ok(response);
+    }
+
+    internal static async Task<IResult> ScraperTaskAsync(IOpenAIService service, ITasksAiDevsClient client, CancellationToken cancellationToken) 
+    { 
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(120)); 
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cts.Token); 
+ 
+        var token = await client.GetTokenAsync("scraper", linkedCts.Token); 
+        JsonObject task = await client.GetTaskAsync(token, null, linkedCts.Token);
+        task.TryGetPropertyValue("input", out var input);
+        task.TryGetPropertyValue("question", out var question);
+
+        using var stream = await client.GetFileAsync(input!.GetValue<string>(), linkedCts.Token);
+        using var reader = new StreamReader(stream);
+        var context = await reader.ReadToEndAsync(linkedCts.Token);
+        var result = await service.GenerateAnswerAsync(question!.GetValue<string>(), context, linkedCts.Token); 
+        var response = await client.SendAnswerAsync(token, result, linkedCts.Token); 
         return Results.Ok(response);
     }
 }

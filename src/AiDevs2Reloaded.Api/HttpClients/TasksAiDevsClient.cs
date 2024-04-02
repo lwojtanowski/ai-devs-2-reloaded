@@ -3,7 +3,6 @@ using AiDevs2Reloaded.Api.Contracts.AIDevs;
 using AiDevs2Reloaded.Api.Exceptions;
 using AiDevs2Reloaded.Api.HttpClients.Abstractions;
 using Microsoft.Extensions.Options;
-using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -108,7 +107,7 @@ public class TasksAiDevsClient : ITasksAiDevsClient
             _logger.LogError(ex, "Error while getting token");
             throw;
         }
-        
+
         throw new MissingTokenException();
     }
 
@@ -147,7 +146,10 @@ public class TasksAiDevsClient : ITasksAiDevsClient
 
     public async Task<Stream> GetFileAsync(string url, CancellationToken cancellationToken = default)
     {
-        var response = await _httpClient.GetAsync(url, cancellationToken);
+        var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537");
+
+        var response = await _httpClient.SendAsync(request, cancellationToken);
         response.EnsureSuccessStatusCode();
         var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
         return stream;

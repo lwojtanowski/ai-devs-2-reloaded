@@ -1,6 +1,7 @@
 ﻿using AiDevs2Reloaded.Api.Configurations;
 using AiDevs2Reloaded.Api.HttpClients;
 using AiDevs2Reloaded.Api.HttpClients.Abstractions;
+using AiDevs2Reloaded.Api.HttpClients.Policies;
 using AiDevs2Reloaded.Api.Services;
 using AiDevs2Reloaded.Api.Services.Abstractions;
 using Microsoft.Extensions.Options;
@@ -18,7 +19,7 @@ public static class DependencyInjection
         {
             var options = services.GetRequiredService<IOptions<AiDevs2ReloadedOptions>>().Value;
             client.BaseAddress = new Uri(options.BaseUrl);
-        });
+        }).AddPolicyHandler(Policy.GetRetryPolicy());
 
         services.AddHttpClient<IOpenAIModerationClient, OpenAIModerationClient>((services, client) =>
         {

@@ -34,3 +34,18 @@ GET {{AiDevs2Reloaded.Api_HostAddress}}/whisper/
 Accept: application/json
 
 ###
+
+GET {{AiDevs2Reloaded.Api_HostAddress}}/functions/
+Accept: application/json
+
+###
+
+GET {{AiDevs2Reloaded.Api_HostAddress}}/rodo/
+Accept: application/json
+
+###
+
+GET {{AiDevs2Reloaded.Api_HostAddress}}/scraper/
+Accept: application/json
+
+###
