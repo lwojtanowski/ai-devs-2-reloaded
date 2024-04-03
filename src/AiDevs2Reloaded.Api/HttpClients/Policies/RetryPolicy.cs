@@ -4,7 +4,7 @@ using System.Net;
 
 namespace AiDevs2Reloaded.Api.HttpClients.Policies;
 
-public static partial class  Policy
+public static partial class Policy
 {
     public static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy(int retryCount = 3)
     {

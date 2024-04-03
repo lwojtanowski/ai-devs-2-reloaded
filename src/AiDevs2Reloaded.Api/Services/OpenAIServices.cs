@@ -23,7 +23,7 @@ public class OpenAIServices : IOpenAIService
         _logger = logger;
     }
 
-    public async Task<string> GenerateAnswerAsync(string input, string context, CancellationToken cancellationToken = default)
+    public async Task<string> CompletationsAsync(string input, string context, CancellationToken cancellationToken = default)
     {
         var client = new OpenAIClient(_options.ApiKey);
         var systemPromptBuilder = new StringBuilder();
@@ -252,6 +252,41 @@ public class OpenAIServices : IOpenAIService
         }
 
         throw new NotImplementedException();
+    }
+
+    public async Task<string> CompletionsAsync(string system, string input, CancellationToken cancellationToken = default)
+    {
+        var client = new OpenAIClient(_options.ApiKey);
+
+        List<ChatRequestMessage> messages = new()
+        {
+             new ChatRequestSystemMessage(system),
+             new ChatRequestUserMessage(input)
+        };
+
+        var chatCompletionsOptions = new ChatCompletionsOptions("gpt-3.5-turbo", messages);
+
+        try
+        {
+            var response = await client.GetChatCompletionsAsync(chatCompletionsOptions, cancellationToken);
+            if (response.HasValue)
+            {
+                var message = response.Value.Choices
+                    .Select(x => x.Message)
+                    .Where(m => m.Role == ChatRole.Assistant)
+                    .Select(m => m.Content)
+                    .FirstOrDefault();
+
+                return message!;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error while retriving response from OpenAI");
+            throw;
+        }
+
+        throw new BlogPostGenerationException();
     }
 
     private FunctionDefinition GetAddUserFunctionDefinition()

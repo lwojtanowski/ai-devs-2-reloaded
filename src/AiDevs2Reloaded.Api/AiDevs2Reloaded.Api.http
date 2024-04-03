@@ -49,3 +49,8 @@ GET {{AiDevs2Reloaded.Api_HostAddress}}/scraper/
 Accept: application/json
 
 ###
+
+GET {{AiDevs2Reloaded.Api_HostAddress}}/whoami/
+Accept: application/json
+
+###

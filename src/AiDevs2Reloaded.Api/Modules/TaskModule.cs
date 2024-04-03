@@ -61,6 +61,11 @@ internal static class TaskModule
             .WithName("scraper")
             .WithTags("AI Devs 2 Tasks")
             .WithOpenApi();
+
+        app.MapGet("/whoami", async (IOpenAIService service, ITasksAiDevsClient client, CancellationToken ct) => await WhoAmITaskAsync(service, client, ct))
+            .WithName("whoami")
+            .WithTags("AI Devs 2 Tasks")
+            .WithOpenApi();
     }
 
     internal static async Task<IResult> HelloApiTaskAsync(ITasksAiDevsClient client, CancellationToken cancellationToken = default)
@@ -156,7 +161,7 @@ internal static class TaskModule
         //var response = await client.SendAnswerAsync(token, context, linkedCts.Token);
         //return Results.Ok(response);
 
-        var answer = await service.GenerateAnswerAsync(question!.GetValue<string>(), context, linkedCts.Token);
+        var answer = await service.CompletationsAsync(question!.GetValue<string>(), context, linkedCts.Token);
         var response = await client.SendAnswerAsync(token, answer, linkedCts.Token);
         return Results.Ok(response);
     }
@@ -182,7 +187,7 @@ internal static class TaskModule
 
         // If you want save some monay just use this:
         //var url = "https://tasks.aidevs.pl/data/mateusz.mp3";
-        var url = await service.GenerateAnswerAsync(task.Msg, "In user input you will find URL (start with https). Return this url", linkedCts.Token);
+        var url = await service.CompletationsAsync(task.Msg, "In user input you will find URL (start with https). Return this url", linkedCts.Token);
 
         using var stream = await client.GetFileAsync(url, linkedCts.Token);
 
@@ -263,8 +268,62 @@ internal static class TaskModule
         using var stream = await client.GetFileAsync(input!.GetValue<string>(), linkedCts.Token);
         using var reader = new StreamReader(stream);
         var context = await reader.ReadToEndAsync(linkedCts.Token);
-        var result = await service.GenerateAnswerAsync(question!.GetValue<string>(), context, linkedCts.Token); 
+        var result = await service.CompletationsAsync(question!.GetValue<string>(), context, linkedCts.Token); 
         var response = await client.SendAnswerAsync(token, result, linkedCts.Token); 
         return Results.Ok(response);
+    }
+
+    internal static async Task<IResult> WhoAmITaskAsync(IOpenAIService service, ITasksAiDevsClient client, CancellationToken cancellationToken)
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cts.Token);
+
+        var systemPromptBuilder = new StringBuilder();
+        systemPromptBuilder.Append("Your task is to guess which person the user is thinking of");
+        systemPromptBuilder.Append("The user will provide a hint about the person they are thinking of");
+        systemPromptBuilder.Append("REMEMBER, you tell the truth and nothing but the truth");
+        systemPromptBuilder.Append("The rules are:");
+        systemPromptBuilder.Append("-you must be 90% sure about who it is.");
+        systemPromptBuilder.Append("-if are not sure return \"NEED MORE HINTS\"");
+        systemPromptBuilder.Append("-if you are sure return the name of the person");
+
+        var token = await client.GetTokenAsync("whoami", linkedCts.Token);
+        List<string> hints = [await GetHintAsync(client, token, linkedCts.Token)];
+
+        string answer = await GuessPersonAsync(service, client, token, systemPromptBuilder.ToString(), hints, linkedCts.Token);
+
+        var response = await client.SendAnswerAsync(token, answer, linkedCts.Token);
+        return Results.Ok(response);
+    }
+
+    private static async Task<string> GetHintAsync(ITasksAiDevsClient client, string token, CancellationToken ct)
+    {
+        JsonObject task = await client.GetTaskAsync(token, null, ct);
+        task.TryGetPropertyValue("hint", out var hint);
+        return hint!.GetValue<string>();
+    }
+
+    private static async Task<string> GuessPersonAsync(
+        IOpenAIService service, 
+        ITasksAiDevsClient client, 
+        string token,
+        string system, 
+        List<string> hints, 
+        CancellationToken cancellationToken)
+    {
+        var answer = await service.CompletionsAsync(
+            system, 
+            $"Guess who I'm thinking of, here are the hints:\n{string.Join("\n-", hints)}", 
+            cancellationToken);
+
+        if (answer.Equals("NEED MORE HINTS", StringComparison.OrdinalIgnoreCase))
+        {
+            hints.Add(await GetHintAsync(client, token, cancellationToken));
+            return await GuessPersonAsync(service, client, token, system, hints, cancellationToken);
+        }
+        else
+        {
+            return answer;
+        }
     }
 }
