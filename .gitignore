@@ -7,3 +7,4 @@ obj
 bin
 *Development.json
 *.user
+/src/AiDevs2Reloaded.Api/news.json

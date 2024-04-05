@@ -1,9 +1,16 @@
-﻿using AiDevs2Reloaded.Api.HttpClients.Abstractions;
+﻿using AiDevs2Reloaded.Api.Configurations;
+using AiDevs2Reloaded.Api.Contracts.AIDevs;
+using AiDevs2Reloaded.Api.HttpClients.Abstractions;
+using AiDevs2Reloaded.Api.Services;
 using AiDevs2Reloaded.Api.Services.Abstractions;
+using Microsoft.Extensions.Options;
 using Polly;
+using System;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using System.Threading;
 
 namespace AiDevs2Reloaded.Api.Modules;
 
@@ -64,6 +71,16 @@ internal static class TaskModule
 
         app.MapGet("/whoami", async (IOpenAIService service, ITasksAiDevsClient client, CancellationToken ct) => await WhoAmITaskAsync(service, client, ct))
             .WithName("whoami")
+            .WithTags("AI Devs 2 Tasks")
+            .WithOpenApi();
+
+        app.MapGet("/search", async (IOpenAIService service, ITasksAiDevsClient client, IVectoreStore vectoreStore, CancellationToken ct) => await SearchTaskAsync(service, client, vectoreStore, ct))
+            .WithName("search")
+            .WithTags("AI Devs 2 Tasks")
+            .WithOpenApi();
+
+        app.MapGet("/people", async (IOpenAIService service, ITasksAiDevsClient client, CancellationToken ct) => await PeopleTaskAsync(service, client, ct))
+            .WithName("people")
             .WithTags("AI Devs 2 Tasks")
             .WithOpenApi();
     }
@@ -172,7 +189,8 @@ internal static class TaskModule
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cts.Token);
 
         var token = await client.GetTokenAsync("embedding", linkedCts.Token);
-        var answer = await service.EmbeddingAsync("Hawaiian pizza", linkedCts.Token);
+        var embeddings = await service.EmbeddingAsync(new List<string> { "Hawaiian pizza" }, linkedCts.Token);
+        var answer = embeddings[0].Embedding;
         var response = await client.SendAnswerAsync(token, answer, linkedCts.Token);
         return Results.Ok(response);
     }
@@ -296,6 +314,93 @@ internal static class TaskModule
         return Results.Ok(response);
     }
 
+    internal static async Task<IResult> SearchTaskAsync(IOpenAIService service, ITasksAiDevsClient client, IVectoreStore vectoreStore, CancellationToken cancellationToken)
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cts.Token);
+
+        var token = await client.GetTokenAsync("search", linkedCts.Token);
+        JsonObject task = await client.GetTaskAsync(token, null, linkedCts.Token);
+        task.TryGetPropertyValue("question", out var question);
+        
+        var questionVector = (await service.EmbeddingAsync(new List<string> { question!.GetValue<string>() }, linkedCts.Token))[0].Embedding;
+
+        var collection = await vectoreStore.TryGetCollectionAsync("news", linkedCts.Token);
+        if (!collection.Any())
+        {
+
+            task.TryGetPropertyValue("msg", out var msg);
+            var url = new Regex(@"\bhttps?:\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|]", RegexOptions.IgnoreCase).Match(msg!.GetValue<string>()).Value;
+            using var stream = await client.GetFileAsync(url, linkedCts.Token);
+            using var reader = new StreamReader(stream);
+            List<NewsResponse> news = JsonSerializer.Deserialize<List<NewsResponse>>(await reader.ReadToEndAsync(linkedCts.Token), new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
+
+            news = news.OrderBy(x => x.Date).ToList();
+            var titles = news.OrderBy(x => x.Date).Select(x => x.Title).ToList();
+            var embeddings = await service.EmbeddingAsync(titles, linkedCts.Token);
+
+            var vectors = embeddings
+                .Select(x => 
+                    new VectoreStoreDto(x.Embedding.ToArray(), new Dictionary<string, string>{
+                        { "url", news[x.Index].Url },
+                        { "date", news[x.Index].Date.ToString() }
+                    })
+                    ).ToList();
+
+            await vectoreStore.StoreAsync("news", vectors, linkedCts.Token);
+        }
+
+        var searchResults = await vectoreStore.SearchAsync("news", questionVector.ToArray(), 1, linkedCts.Token);
+        var response = await client.SendAnswerAsync(token, searchResults[0].Metadata["url"], linkedCts.Token);
+        return Results.Ok(response);
+    }
+
+    internal static async Task<IResult> PeopleTaskAsync(IOpenAIService service, ITasksAiDevsClient client, CancellationToken cancellationToken)
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cts.Token);
+
+        var token = await client.GetTokenAsync("people", linkedCts.Token);
+        JsonObject task = await client.GetTaskAsync(token, null, linkedCts.Token);
+        task.TryGetPropertyValue("question", out var question);
+        task.TryGetPropertyValue("data", out var data);
+
+        var systemPromptBuilder = new StringBuilder();
+        systemPromptBuilder.Append("Create JSON response {\"imie\":\"Joe(first name)\",\"nazwisko\":\"Doe(last name)\",\"question\":\"wiek(age of person)|o_mnie(about)|ulubiona_postac_z_kapitana_bomby(favorie cartoon character)|ulubiony_serial(favorite series)|ulubiony_film(favorite move)|ulubiony_kolor(favorite colour)\"}");
+        systemPromptBuilder.Append("example###");
+        systemPromptBuilder.Append("What color does Jon Doe like?");
+        systemPromptBuilder.Append("{\"imie\":\"Joe\",\"nazwisko\":\"Doe\",\"question\":\"ulubiony_kolor\"}");
+        systemPromptBuilder.Append("Where does Jon Doe live?");
+        systemPromptBuilder.Append("{\"imie\":\"Joe\",\"nazwisko\":\"Doe\",\"question\":\"o_mnie\"}");
+        systemPromptBuilder.Append("Where does Jon Doe like to eat?");
+        systemPromptBuilder.Append("{\"imie\":\"Joe\",\"nazwisko\":\"Doe\",\"question\":\"o_mnie\"}");
+        systemPromptBuilder.Append("How old is Jon Doe?");
+        systemPromptBuilder.Append("{\"imie\":\"Joe\",\"nazwisko\":\"Doe\",\"question\":\"wiek\"}");
+        systemPromptBuilder.Append("Jaki kolor podoba się Janowi Kowalskiemu?");
+        systemPromptBuilder.Append("{\"imie\":\"Jan\",\"nazwisko\":\"Kowalski\",\"question\":\"ulubiony_kolor\"}");
+        systemPromptBuilder.Append("Jaka postać z bomby podoba się najbardziej Janowi Kowalskiemu?");
+        systemPromptBuilder.Append("{\"imie\":\"Jan\",\"nazwisko\":\"Kowalski\",\"question\":\"ulubiona_postac_z_kapitana_bomby\"}");
+        systemPromptBuilder.Append("###");
+
+        var serializedQuestion = await service.CompletionsAsync(
+            systemPromptBuilder.ToString(),
+            question!.GetValue<string>(),
+            cancellationToken);
+
+        var category = JsonSerializer.Deserialize<PersonCategory>(serializedQuestion)!;
+
+        using var stream = await client.GetFileAsync(data!.GetValue<string>(), linkedCts.Token);
+        using var reader = new StreamReader(stream);
+        List<PeopleResponse> peoples = JsonSerializer.Deserialize<List<PeopleResponse>>(await reader.ReadToEndAsync(linkedCts.Token))!;
+
+        var person = peoples.Single(x => x.imie.Equals(category.imie, StringComparison.OrdinalIgnoreCase) && x.nazwisko.Equals(category.nazwisko, StringComparison.OrdinalIgnoreCase));
+        var type = person.GetType();
+        var property = type.GetProperty(category.question);
+        var answer = await service.CompletationsAsync(question!.GetValue<string>()!, property?.GetValue(person)?.ToString() ?? "MISSING CONTEXT", linkedCts.Token);
+        var response = await client.SendAnswerAsync(token, answer, linkedCts.Token);
+        return Results.Ok(response);
+    }
+
     private static async Task<string> GetHintAsync(ITasksAiDevsClient client, string token, CancellationToken ct)
     {
         JsonObject task = await client.GetTaskAsync(token, null, ct);
@@ -327,3 +432,4 @@ internal static class TaskModule
         }
     }
 }
+public record PersonCategory(string imie, string nazwisko, string question);

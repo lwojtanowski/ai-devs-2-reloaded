@@ -28,6 +28,7 @@ public static class DependencyInjection
         });
 
         services.AddScoped<IOpenAIService, OpenAIServices>();
+        services.AddScoped<IVectoreStore, VectoreStore>();
 
         return services;
     }

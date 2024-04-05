@@ -149,21 +149,20 @@ public class OpenAIServices : IOpenAIService
         throw new BlogPostGenerationException();
     }
 
-    public async Task<ReadOnlyMemory<float>> EmbeddingAsync(string input, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<EmbeddingItem>> EmbeddingAsync(List<string> input, CancellationToken cancellationToken = default)
     {
         var client = new OpenAIClient(_options.ApiKey);
         EmbeddingsOptions embeddingsOptions = new()
         {
             DeploymentName = "text-embedding-ada-002",
-            Input = { input },
         };
+
+        input.ForEach(x => embeddingsOptions.Input.Add(x));
 
         try
         {
             var response = await client.GetEmbeddingsAsync(embeddingsOptions, cancellationToken);
-            EmbeddingItem item = response.Value.Data[0];
-            ReadOnlyMemory<float> embedding = item.Embedding;
-            return embedding;
+            return response.Value.Data;
         }
         catch (Exception ex)
         {
@@ -189,13 +188,13 @@ public class OpenAIServices : IOpenAIService
         {
             var response = await client.GetAudioTranscriptionAsync(transcriptionOptions, cancellationToken);
             return response.Value.Text;
-        } 
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error while retriving response from OpenAI");
             throw;
         }
-        
+
         throw new MissingTranscriptionException();
     }
 
@@ -296,7 +295,7 @@ public class OpenAIServices : IOpenAIService
             Name = "addUser",
             Description = "Add user to the system",
             Parameters = BinaryData.FromObjectAsJson(
-                new 
+                new
                 {
                     Type = "object",
                     Properties = new
@@ -318,13 +317,13 @@ public class OpenAIServices : IOpenAIService
                         }
                     },
                     Required = new[] { "Name", "Surname", "Year" }
-                }, 
+                },
                 new JsonSerializerOptions() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })
         };
 
         return function;
     }
-    
+
     private string AddUserFunctionResultData(AddUserRequest request)
     {
         var message = $"User {request.Name} {request.Surname} born in {request.Year} has been added to the system";
