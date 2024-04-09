@@ -64,3 +64,13 @@ GET {{AiDevs2Reloaded.Api_HostAddress}}/people/
 Accept: application/json
 
 ###
+
+GET {{AiDevs2Reloaded.Api_HostAddress}}/knowledge/
+Accept: application/json
+
+###
+
+GET {{AiDevs2Reloaded.Api_HostAddress}}/tools/
+Accept: application/json
+
+###

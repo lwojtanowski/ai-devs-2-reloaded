@@ -5,6 +5,8 @@ using AiDevs2Reloaded.Api.HttpClients.Policies;
 using AiDevs2Reloaded.Api.Services;
 using AiDevs2Reloaded.Api.Services.Abstractions;
 using Microsoft.Extensions.Options;
+using Microsoft.SemanticKernel;
+using Refit;
 
 namespace AiDevs2Reloaded.Api;
 
@@ -28,6 +30,7 @@ public static class DependencyInjection
         });
 
         services.AddScoped<IOpenAIService, OpenAIServices>();
+        services.AddScoped<IOpenAISemanticKernalService, OpenAISemanticKernalService>();
         services.AddScoped<IVectoreStore, VectoreStore>();
 
         return services;

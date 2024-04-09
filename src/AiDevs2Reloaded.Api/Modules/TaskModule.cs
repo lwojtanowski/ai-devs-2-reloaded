@@ -1,16 +1,11 @@
-﻿using AiDevs2Reloaded.Api.Configurations;
-using AiDevs2Reloaded.Api.Contracts.AIDevs;
+﻿using AiDevs2Reloaded.Api.Contracts.AIDevs;
 using AiDevs2Reloaded.Api.HttpClients.Abstractions;
 using AiDevs2Reloaded.Api.Services;
 using AiDevs2Reloaded.Api.Services.Abstractions;
-using Microsoft.Extensions.Options;
-using Polly;
-using System;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
-using System.Threading;
 
 namespace AiDevs2Reloaded.Api.Modules;
 
@@ -81,6 +76,16 @@ internal static class TaskModule
 
         app.MapGet("/people", async (IOpenAIService service, ITasksAiDevsClient client, CancellationToken ct) => await PeopleTaskAsync(service, client, ct))
             .WithName("people")
+            .WithTags("AI Devs 2 Tasks")
+            .WithOpenApi();
+
+        app.MapGet("/knowledge", async (IOpenAISemanticKernalService service, ITasksAiDevsClient client, CancellationToken ct) => await KnowledgeTaskAsync(service, client, ct))
+            .WithName("knowledge")
+            .WithTags("AI Devs 2 Tasks")
+            .WithOpenApi();
+
+        app.MapGet("/tools", async (IOpenAIService service, ITasksAiDevsClient client, CancellationToken ct) => await ToolsTaskAsync(service, client, ct))
+            .WithName("tools")
             .WithTags("AI Devs 2 Tasks")
             .WithOpenApi();
     }
@@ -273,12 +278,12 @@ internal static class TaskModule
         return Results.Ok(response);
     }
 
-    internal static async Task<IResult> ScraperTaskAsync(IOpenAIService service, ITasksAiDevsClient client, CancellationToken cancellationToken) 
-    { 
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(120)); 
-        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cts.Token); 
- 
-        var token = await client.GetTokenAsync("scraper", linkedCts.Token); 
+    internal static async Task<IResult> ScraperTaskAsync(IOpenAIService service, ITasksAiDevsClient client, CancellationToken cancellationToken)
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cts.Token);
+
+        var token = await client.GetTokenAsync("scraper", linkedCts.Token);
         JsonObject task = await client.GetTaskAsync(token, null, linkedCts.Token);
         task.TryGetPropertyValue("input", out var input);
         task.TryGetPropertyValue("question", out var question);
@@ -286,8 +291,8 @@ internal static class TaskModule
         using var stream = await client.GetFileAsync(input!.GetValue<string>(), linkedCts.Token);
         using var reader = new StreamReader(stream);
         var context = await reader.ReadToEndAsync(linkedCts.Token);
-        var result = await service.CompletationsAsync(question!.GetValue<string>(), context, linkedCts.Token); 
-        var response = await client.SendAnswerAsync(token, result, linkedCts.Token); 
+        var result = await service.CompletationsAsync(question!.GetValue<string>(), context, linkedCts.Token);
+        var response = await client.SendAnswerAsync(token, result, linkedCts.Token);
         return Results.Ok(response);
     }
 
@@ -322,7 +327,7 @@ internal static class TaskModule
         var token = await client.GetTokenAsync("search", linkedCts.Token);
         JsonObject task = await client.GetTaskAsync(token, null, linkedCts.Token);
         task.TryGetPropertyValue("question", out var question);
-        
+
         var questionVector = (await service.EmbeddingAsync(new List<string> { question!.GetValue<string>() }, linkedCts.Token))[0].Embedding;
 
         var collection = await vectoreStore.TryGetCollectionAsync("news", linkedCts.Token);
@@ -340,7 +345,7 @@ internal static class TaskModule
             var embeddings = await service.EmbeddingAsync(titles, linkedCts.Token);
 
             var vectors = embeddings
-                .Select(x => 
+                .Select(x =>
                     new VectoreStoreDto(x.Embedding.ToArray(), new Dictionary<string, string>{
                         { "url", news[x.Index].Url },
                         { "date", news[x.Index].Date.ToString() }
@@ -401,6 +406,44 @@ internal static class TaskModule
         return Results.Ok(response);
     }
 
+    internal static async Task<IResult> KnowledgeTaskAsync(IOpenAISemanticKernalService service, ITasksAiDevsClient client, CancellationToken cancellationToken)
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cts.Token);
+
+        var token = await client.GetTokenAsync("knowledge", linkedCts.Token);
+        JsonObject task = await client.GetTaskAsync(token, null, linkedCts.Token);
+        task.TryGetPropertyValue("question", out var question);
+
+        var answer = await service.KnowledgeTaskAsync(question!.GetValue<string>(), linkedCts.Token);
+        var response = await client.SendAnswerAsync(token, answer, linkedCts.Token);
+        return Results.Ok(response);
+    }
+
+    internal static async Task<IResult> ToolsTaskAsync(IOpenAIService service, ITasksAiDevsClient client, CancellationToken cancellationToken)
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cts.Token);
+
+        var token = await client.GetTokenAsync("tools", linkedCts.Token);
+        JsonObject task = await client.GetTaskAsync(token, null, linkedCts.Token);
+        task.TryGetPropertyValue("question", out var question);
+
+        var systemPromptBuilder = new StringBuilder();
+        systemPromptBuilder.Append("Convert youser input to action.");
+        systemPromptBuilder.Append("Answer JSON {\"tool\":\"ToDo(action to do in future)|Calendar(action to add event to calendar)\",\"desc\":\"Summarized action description\",\"date\":\"YYYY-MM-DD(date of action only for calendar action)\"}");
+        systemPromptBuilder.Append("Today date is" + DateTime.Now.Date.ToString("yyyy-MM-dd"));
+        systemPromptBuilder.Append("example###");
+        systemPromptBuilder.Append("Przypomnij mi, że mam kupić mleko = {\"tool\":\"ToDo\",\"desc\":\"Kup mleko\" }");
+        systemPromptBuilder.Append("Jutro mam spotkanie z Marianem = {\"tool\":\"Calendar\",\"desc\":\"Spotkanie z Marianem\",\"date\":\"2024-04-10\"}");
+        systemPromptBuilder.Append("###");
+
+        var action = await service.CompletionsAsync(systemPromptBuilder.ToString(), question!.GetValue<string>(), linkedCts.Token);
+        var answer = JsonSerializer.Deserialize<ActionToDo>(action);
+        var response = await client.SendAnswerAsync(token, answer, linkedCts.Token);
+        return Results.Ok(response);
+    }
+
     private static async Task<string> GetHintAsync(ITasksAiDevsClient client, string token, CancellationToken ct)
     {
         JsonObject task = await client.GetTaskAsync(token, null, ct);
@@ -409,16 +452,16 @@ internal static class TaskModule
     }
 
     private static async Task<string> GuessPersonAsync(
-        IOpenAIService service, 
-        ITasksAiDevsClient client, 
+        IOpenAIService service,
+        ITasksAiDevsClient client,
         string token,
-        string system, 
-        List<string> hints, 
+        string system,
+        List<string> hints,
         CancellationToken cancellationToken)
     {
         var answer = await service.CompletionsAsync(
-            system, 
-            $"Guess who I'm thinking of, here are the hints:\n{string.Join("\n-", hints)}", 
+            system,
+            $"Guess who I'm thinking of, here are the hints:\n{string.Join("\n-", hints)}",
             cancellationToken);
 
         if (answer.Equals("NEED MORE HINTS", StringComparison.OrdinalIgnoreCase))
@@ -433,3 +476,4 @@ internal static class TaskModule
     }
 }
 public record PersonCategory(string imie, string nazwisko, string question);
+public record ActionToDo(string tool, string desc, string date);
