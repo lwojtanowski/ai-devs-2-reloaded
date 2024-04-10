@@ -88,6 +88,11 @@ internal static class TaskModule
             .WithName("tools")
             .WithTags("AI Devs 2 Tasks")
             .WithOpenApi();
+
+        app.MapGet("/gnome", async (IOpenAIService service, ITasksAiDevsClient client, CancellationToken ct) => await GnomeTaskAsync(service, client, ct))
+            .WithName("gnome")
+            .WithTags("AI Devs 2 Tasks")
+            .WithOpenApi();
     }
 
     internal static async Task<IResult> HelloApiTaskAsync(ITasksAiDevsClient client, CancellationToken cancellationToken = default)
@@ -440,6 +445,25 @@ internal static class TaskModule
 
         var action = await service.CompletionsAsync(systemPromptBuilder.ToString(), question!.GetValue<string>(), linkedCts.Token);
         var answer = JsonSerializer.Deserialize<ActionToDo>(action);
+        var response = await client.SendAnswerAsync(token, answer, linkedCts.Token);
+        return Results.Ok(response);
+    }
+
+    internal static async Task<IResult> GnomeTaskAsync(IOpenAIService service, ITasksAiDevsClient client, CancellationToken cancellationToken)
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cts.Token);
+
+        var token = await client.GetTokenAsync("gnome", linkedCts.Token);
+        JsonObject task = await client.GetTaskAsync(token, null, linkedCts.Token);
+        task.TryGetPropertyValue("url", out var url);
+
+        var systemPromptBuilder = new StringBuilder();
+        systemPromptBuilder.Append("Analyze the image and return colour of hat.");
+        systemPromptBuilder.Append("Answer should be in Polish.");
+        systemPromptBuilder.Append("When there is no hat in the image, return \"error\"");
+        var answer = await service.AnalyzeImageAsync(systemPromptBuilder.ToString(), url!.GetValue<string>(), linkedCts.Token);
+
         var response = await client.SendAnswerAsync(token, answer, linkedCts.Token);
         return Results.Ok(response);
     }

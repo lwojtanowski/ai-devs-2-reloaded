@@ -11,4 +11,5 @@ public interface IOpenAIService
     Task<string> AudioToSpeechAsync(Stream stream, CancellationToken cancellationToken = default);
     Task<string> AddUserAsync(string input, CancellationToken cancellationToken = default);
     Task<string> CompletionsAsync(string system, string input, CancellationToken cancellationToken = default);
+    Task<string> AnalyzeImageAsync(string system, string url, CancellationToken cancellationToken = default);
 }

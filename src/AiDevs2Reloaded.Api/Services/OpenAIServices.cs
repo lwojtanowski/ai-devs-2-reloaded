@@ -5,6 +5,7 @@ using Azure.AI.OpenAI;
 using Microsoft.Extensions.Options;
 using System.Text;
 using System.Text.Json;
+using System.Threading.Tasks;
 
 namespace AiDevs2Reloaded.Api.Services;
 
@@ -264,6 +265,41 @@ public class OpenAIServices : IOpenAIService
         };
 
         var chatCompletionsOptions = new ChatCompletionsOptions("gpt-3.5-turbo", messages);
+
+        try
+        {
+            var response = await client.GetChatCompletionsAsync(chatCompletionsOptions, cancellationToken);
+            if (response.HasValue)
+            {
+                var message = response.Value.Choices
+                    .Select(x => x.Message)
+                    .Where(m => m.Role == ChatRole.Assistant)
+                    .Select(m => m.Content)
+                    .FirstOrDefault();
+
+                return message!;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error while retriving response from OpenAI");
+            throw;
+        }
+
+        throw new BlogPostGenerationException();
+    }
+
+    public async Task<string> AnalyzeImageAsync(string system, string url, CancellationToken cancellationToken = default)
+    {
+        var client = new OpenAIClient(_options.ApiKey);
+
+        List<ChatRequestMessage> messages = new()
+        {
+             new ChatRequestSystemMessage(system),
+             new ChatRequestUserMessage(new ChatMessageImageContentItem(new Uri(url), ChatMessageImageDetailLevel.Low))
+        };
+
+        var chatCompletionsOptions = new ChatCompletionsOptions("gpt-4-turbo", messages);
 
         try
         {

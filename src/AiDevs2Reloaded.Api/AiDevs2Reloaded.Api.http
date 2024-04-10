@@ -74,3 +74,8 @@ GET {{AiDevs2Reloaded.Api_HostAddress}}/tools/
 Accept: application/json
 
 ###
+
+GET {{AiDevs2Reloaded.Api_HostAddress}}/gnome/
+Accept: application/json
+
+###
