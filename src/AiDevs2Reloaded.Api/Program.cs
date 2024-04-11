@@ -31,5 +31,6 @@ var app = builder.Build();
     app.UseSerilogRequestLogging();
     app.AddTaskModule();
     app.AddSampleModule();
+    app.AddPublicModule();
     app.Run();
 }

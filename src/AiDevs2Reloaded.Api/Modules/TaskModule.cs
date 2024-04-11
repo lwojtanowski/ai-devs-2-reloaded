@@ -93,6 +93,11 @@ internal static class TaskModule
             .WithName("gnome")
             .WithTags("AI Devs 2 Tasks")
             .WithOpenApi();
+
+        app.MapGet("/ownapi", async (ITasksAiDevsClient client, IConfiguration configuration, CancellationToken ct) => await OwnApiTaskAsync(client, configuration, ct))
+            .WithName("ownapi")
+            .WithTags("AI Devs 2 Tasks")
+            .WithOpenApi();
     }
 
     internal static async Task<IResult> HelloApiTaskAsync(ITasksAiDevsClient client, CancellationToken cancellationToken = default)
@@ -465,6 +470,17 @@ internal static class TaskModule
         var answer = await service.AnalyzeImageAsync(systemPromptBuilder.ToString(), url!.GetValue<string>(), linkedCts.Token);
 
         var response = await client.SendAnswerAsync(token, answer, linkedCts.Token);
+        return Results.Ok(response);
+    }
+
+    internal static async Task<IResult> OwnApiTaskAsync(ITasksAiDevsClient client, IConfiguration configuration, CancellationToken cancellationToken)
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cts.Token);
+
+        var token = await client.GetTokenAsync("ownapi", linkedCts.Token);
+
+        var response = await client.SendAnswerAsync(token, configuration["OwnApiUrl"], linkedCts.Token);
         return Results.Ok(response);
     }
 

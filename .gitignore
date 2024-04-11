@@ -8,3 +8,5 @@ bin
 *Development.json
 *.user
 /src/AiDevs2Reloaded.Api/news.json
+/src/AiDevs2Reloaded.Api/Properties/PublishProfiles/*
+/src/AiDevs2Reloaded.Api/Properties/ServiceDependencies/*
