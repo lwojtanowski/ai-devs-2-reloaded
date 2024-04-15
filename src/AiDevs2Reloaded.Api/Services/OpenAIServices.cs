@@ -256,6 +256,7 @@ public class OpenAIServices : IOpenAIService
 
     public async Task<string> CompletionsAsync(string system, string input, CancellationToken cancellationToken = default)
     {
+        _logger.LogInformation("User input: {Input}", input);
         var client = new OpenAIClient(_options.ApiKey);
 
         List<ChatRequestMessage> messages = new()
@@ -276,6 +277,8 @@ public class OpenAIServices : IOpenAIService
                     .Where(m => m.Role == ChatRole.Assistant)
                     .Select(m => m.Content)
                     .FirstOrDefault();
+
+                _logger.LogInformation("OpenAI response: {Response}", message);
 
                 return message!;
             }

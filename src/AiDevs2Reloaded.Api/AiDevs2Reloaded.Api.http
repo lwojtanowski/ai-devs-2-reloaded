@@ -79,3 +79,18 @@ GET {{AiDevs2Reloaded.Api_HostAddress}}/gnome/
 Accept: application/json
 
 ###
+
+GET {{AiDevs2Reloaded.Api_HostAddress}}/ownapi/
+Accept: application/json
+
+###
+
+GET {{AiDevs2Reloaded.Api_HostAddress}}/ownapipro/
+Accept: application/json
+
+###
+
+GET {{AiDevs2Reloaded.Api_HostAddress}}/meme/
+Accept: application/json
+
+###

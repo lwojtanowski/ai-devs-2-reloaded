@@ -29,6 +29,15 @@ public static class DependencyInjection
             client.BaseAddress = new Uri(options.BaseUrl);
         });
 
+        services.AddRefitClient<IRenderFormApi>()
+            .ConfigureHttpClient((services, client) =>
+            {
+                var configuration = services.GetRequiredService<IConfiguration>();
+                client.DefaultRequestHeaders.Add("X-API-KEY", configuration["RenderForm:ApiKey"]);
+                client.BaseAddress = new Uri("https://get.renderform.io");
+                client.DefaultRequestHeaders.Add("Accept", "application/json");
+            });
+
         services.AddScoped<IOpenAIService, OpenAIServices>();
         services.AddScoped<IOpenAISemanticKernalService, OpenAISemanticKernalService>();
         services.AddScoped<IVectoreStore, VectoreStore>();

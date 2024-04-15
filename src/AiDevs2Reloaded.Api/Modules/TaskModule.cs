@@ -1,4 +1,5 @@
 ﻿using AiDevs2Reloaded.Api.Contracts.AIDevs;
+using AiDevs2Reloaded.Api.Contracts.RenderForm;
 using AiDevs2Reloaded.Api.HttpClients.Abstractions;
 using AiDevs2Reloaded.Api.Services;
 using AiDevs2Reloaded.Api.Services.Abstractions;
@@ -96,6 +97,16 @@ internal static class TaskModule
 
         app.MapGet("/ownapi", async (ITasksAiDevsClient client, IConfiguration configuration, CancellationToken ct) => await OwnApiTaskAsync(client, configuration, ct))
             .WithName("ownapi")
+            .WithTags("AI Devs 2 Tasks")
+            .WithOpenApi();
+
+        app.MapGet("/ownapipro", async (ITasksAiDevsClient client, IConfiguration configuration, CancellationToken ct) => await OwnApiProTaskAsync(client, configuration, ct))
+            .WithName("ownapipro")
+            .WithTags("AI Devs 2 Tasks")
+            .WithOpenApi();
+
+        app.MapGet("/meme", async (ITasksAiDevsClient client, IRenderFormApi renderFormApi, CancellationToken ct) => await MemeTaskAsync(client, renderFormApi, ct))
+            .WithName("meme")
             .WithTags("AI Devs 2 Tasks")
             .WithOpenApi();
     }
@@ -482,6 +493,47 @@ internal static class TaskModule
 
         var response = await client.SendAnswerAsync(token, configuration["OwnApiUrl"], linkedCts.Token);
         return Results.Ok(response);
+    }
+
+    internal static async Task<IResult> OwnApiProTaskAsync(ITasksAiDevsClient client, IConfiguration configuration, CancellationToken cancellationToken)
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cts.Token);
+
+        var token = await client.GetTokenAsync("ownapipro", linkedCts.Token);
+
+        var response = await client.SendAnswerAsync(token, $"{configuration["OwnApiUrl"]}?id={Guid.NewGuid()}", linkedCts.Token);
+        return Results.Ok(response);
+    }
+
+    internal static async Task<IResult> MemeTaskAsync(ITasksAiDevsClient client, IRenderFormApi renderFormApi, CancellationToken cancellationToken)
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cts.Token);
+
+        var token = await client.GetTokenAsync("meme", linkedCts.Token);
+        JsonObject task = await client.GetTaskAsync(token, null, linkedCts.Token);
+        task.TryGetPropertyValue("image", out var image);
+        task.TryGetPropertyValue("text", out var text);
+
+        var data = new Dictionary<string, string>
+        {
+            { "title.text", text!.GetValue<string>() },
+            { "image.src", image!.GetValue<string>() }
+        };
+
+        var request = new RenderImageRequest("friendly-bears-wait-warmly-1652", data);
+        try
+        {
+            var meme = await renderFormApi.RenderAsync(request, linkedCts.Token);
+            var response = await client.SendAnswerAsync(token, meme.href, linkedCts.Token);
+            return Results.Ok(response);
+        }
+        catch(Exception ex)
+        {
+            return Results.BadRequest(ex.Message);
+        }
+
     }
 
     private static async Task<string> GetHintAsync(ITasksAiDevsClient client, string token, CancellationToken ct)
