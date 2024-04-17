@@ -3,9 +3,9 @@ using AiDevs2Reloaded.Api.Exceptions;
 using AiDevs2Reloaded.Api.Services.Abstractions;
 using Azure.AI.OpenAI;
 using Microsoft.Extensions.Options;
+using PuppeteerSharp;
 using System.Text;
 using System.Text.Json;
-using System.Threading.Tasks;
 
 namespace AiDevs2Reloaded.Api.Services;
 
@@ -254,7 +254,7 @@ public class OpenAIServices : IOpenAIService
         throw new NotImplementedException();
     }
 
-    public async Task<string> CompletionsAsync(string system, string input, CancellationToken cancellationToken = default)
+    public async Task<string> CompletionsAsync(string system, string input, bool jsonObject = false, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("User input: {Input}", input);
         var client = new OpenAIClient(_options.ApiKey);
@@ -266,6 +266,10 @@ public class OpenAIServices : IOpenAIService
         };
 
         var chatCompletionsOptions = new ChatCompletionsOptions("gpt-3.5-turbo", messages);
+        if (jsonObject)
+        {
+            chatCompletionsOptions.ResponseFormat = ChatCompletionsResponseFormat.JsonObject;
+        }
 
         try
         {
@@ -281,6 +285,62 @@ public class OpenAIServices : IOpenAIService
                 _logger.LogInformation("OpenAI response: {Response}", message);
 
                 return message!;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error while retriving response from OpenAI");
+            throw;
+        }
+
+        throw new BlogPostGenerationException();
+    }
+
+    public async Task<string> CompletionsWithToolAsync(string system, string input, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("User input: {Input}", input);
+        var client = new OpenAIClient(_options.ApiKey);
+
+        List<ChatRequestMessage> messages = new()
+        {
+             new ChatRequestSystemMessage(system),
+             new ChatRequestUserMessage(input)
+        };
+
+        var chatCompletionsOptions = new ChatCompletionsOptions("gpt-3.5-turbo", messages);
+        var searchInWebTool = SearchInWeb();
+        chatCompletionsOptions.Functions.Add(searchInWebTool);
+
+        try
+        {
+            var response = await client.GetChatCompletionsAsync(chatCompletionsOptions, cancellationToken);
+            if (response.HasValue)
+            {
+
+                if (response.Value.Choices[0]?.FinishReason == CompletionsFinishReason.FunctionCall)
+                {
+                    var choice = response.Value.Choices[0];
+                    if (choice.Message.FunctionCall.Name.Equals(searchInWebTool.Name, StringComparison.OrdinalIgnoreCase))
+                    {
+                        string unvalidatedArguments = choice.Message.FunctionCall.Arguments;
+                        var searchRequest = JsonSerializer.Deserialize<SearchRequest>(unvalidatedArguments, _jsonSerializerOptions)!;
+                        var functionResultData = await WebBrowserScrapeAsync(searchRequest.SearchPhrase);
+                        _logger.LogInformation("Tool call response: {Response}", functionResultData);
+                        return functionResultData;
+                    }
+                }
+                else
+                {
+                    var message = response.Value.Choices
+                        .Select(x => x.Message)
+                        .Where(m => m.Role == ChatRole.Assistant)
+                        .Select(m => m.Content)
+                        .FirstOrDefault();
+
+                    _logger.LogInformation("OpenAI response: {Response}", message);
+
+                    return message!;
+                }
             }
         }
         catch (Exception ex)
@@ -363,14 +423,54 @@ public class OpenAIServices : IOpenAIService
         return function;
     }
 
+    private FunctionDefinition SearchInWeb()
+    {
+        var function = new FunctionDefinition
+        {
+            Name = "searchUrlInWeb",
+            Description = "Search url in web browser",
+            Parameters = BinaryData.FromObjectAsJson(
+                new
+                {
+                    Type = "object",
+                    Properties = new
+                    {
+                        SearchPhrase = new
+                        {
+                            Type = "string",
+                            Description = "Paraphrased text optimal for search engines"
+                        }
+                    },
+                    Required = new[] { "SearchPhrase" }
+                },
+                new JsonSerializerOptions() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })
+        };
+
+        return function;
+    }
+
     private string AddUserFunctionResultData(AddUserRequest request)
     {
         var message = $"User {request.Name} {request.Surname} born in {request.Year} has been added to the system";
         _logger.LogInformation(message);
         return message;
     }
+
+    private async Task<string> WebBrowserScrapeAsync(string searchPhrase)
+    {
+        using var browserFetcher = new BrowserFetcher();
+        await browserFetcher.DownloadAsync();
+        await using var browser = await Puppeteer.LaunchAsync(new LaunchOptions { Headless = true });
+        await using var page = await browser.NewPageAsync();
+        await page.GoToAsync($"https://duckduckgo.com/?t=h_&q={searchPhrase.Replace(" ", "+")}&ia=web");
+        //await page.WaitForExpressionAsync("document.querySelector('[data-testid=\"about_official-website\"]')!=null");
+        await page.WaitForExpressionAsync("document.querySelector('[data-testid=\"result-extras-url-link\"]')!=null");
+        var val = await page.EvaluateFunctionAsync<string>("()=>document.querySelector('[data-testid=\"about_official-website\"]')?.href ?? null");
+        var val2 = await page.EvaluateFunctionAsync<string>("()=>document.querySelector('[data-testid=\"result-extras-url-link\"]').href");
+        return val ?? val2;
+    }
 }
 
 public sealed record BloggerResponse(List<string> Chapters);
-
 public sealed record AddUserRequest(string Name, string Surname, int Year);
+public sealed record SearchRequest(string SearchPhrase);

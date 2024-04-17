@@ -15,6 +15,7 @@
 		<PackageReference Include="Microsoft.AspNetCore.OpenApi" />
 		<PackageReference Include="Microsoft.Extensions.Http.Polly" />
 		<PackageReference Include="Microsoft.SemanticKernel" />
+		<PackageReference Include="PuppeteerSharp" />
 		<PackageReference Include="Refit.HttpClientFactory" />
 		<PackageReference Include="Serilog.AspNetCore" />
 		<PackageReference Include="Swashbuckle.AspNetCore" />

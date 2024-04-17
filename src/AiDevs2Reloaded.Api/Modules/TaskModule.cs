@@ -109,6 +109,16 @@ internal static class TaskModule
             .WithName("meme")
             .WithTags("AI Devs 2 Tasks")
             .WithOpenApi();
+
+        app.MapGet("/optimaldb", async (IOpenAIService service, ITasksAiDevsClient client, CancellationToken ct) => await OptimalDbTaskAsync(service, client, ct))
+            .WithName("optimaldb")
+            .WithTags("AI Devs 2 Tasks")
+            .WithOpenApi();
+
+        app.MapGet("/google", async (ITasksAiDevsClient client, IConfiguration configuration, CancellationToken ct) => await GoogleTaskAsync(client, configuration, ct))
+            .WithName("google")
+            .WithTags("AI Devs 2 Tasks")
+            .WithOpenApi();
     }
 
     internal static async Task<IResult> HelloApiTaskAsync(ITasksAiDevsClient client, CancellationToken cancellationToken = default)
@@ -411,7 +421,7 @@ internal static class TaskModule
         var serializedQuestion = await service.CompletionsAsync(
             systemPromptBuilder.ToString(),
             question!.GetValue<string>(),
-            cancellationToken);
+            cancellationToken: cancellationToken);
 
         var category = JsonSerializer.Deserialize<PersonCategory>(serializedQuestion)!;
 
@@ -459,7 +469,7 @@ internal static class TaskModule
         systemPromptBuilder.Append("Jutro mam spotkanie z Marianem = {\"tool\":\"Calendar\",\"desc\":\"Spotkanie z Marianem\",\"date\":\"2024-04-10\"}");
         systemPromptBuilder.Append("###");
 
-        var action = await service.CompletionsAsync(systemPromptBuilder.ToString(), question!.GetValue<string>(), linkedCts.Token);
+        var action = await service.CompletionsAsync(systemPromptBuilder.ToString(), question!.GetValue<string>(), cancellationToken: linkedCts.Token);
         var answer = JsonSerializer.Deserialize<ActionToDo>(action);
         var response = await client.SendAnswerAsync(token, answer, linkedCts.Token);
         return Results.Ok(response);
@@ -529,11 +539,88 @@ internal static class TaskModule
             var response = await client.SendAnswerAsync(token, meme.href, linkedCts.Token);
             return Results.Ok(response);
         }
-        catch(Exception ex)
+        catch (Exception ex)
         {
             return Results.BadRequest(ex.Message);
         }
+    }
 
+    internal static async Task<IResult> OptimalDbTaskAsync(IOpenAIService service, ITasksAiDevsClient client, CancellationToken cancellationToken)
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cts.Token);
+
+        var token = await client.GetTokenAsync("optimaldb", linkedCts.Token);
+        JsonObject task = await client.GetTaskAsync(token, null, linkedCts.Token);
+        task.TryGetPropertyValue("database", out var database);
+
+        using var stream = await client.GetFileAsync(database!.GetValue<string>(), linkedCts.Token);
+        using var reader = new StreamReader(stream);
+        Dictionary<string, List<string>> peoples = JsonSerializer.Deserialize<Dictionary<string, List<string>>>(await reader.ReadToEndAsync(linkedCts.Token))!;
+
+        var systemPromptBuilder = new StringBuilder();
+        systemPromptBuilder.AppendLine("Based on the person's description create fallowing JSON {\"type\":\"skill(skills possessed by a person)|favorite(a person's favorite food, games, music, car etc.)|personal(detailed information about the person such as where he lives, with whom, etc)|hobby(what person liek to do in free time)|other(all other important information like important events in life)\",\"description:\":\"a brief summary of relevant information for a given type\"}");
+        systemPromptBuilder.AppendLine("Use only important information");
+        systemPromptBuilder.AppendLine("Fallow the rules:");
+        systemPromptBuilder.AppendLine("-description MUST be as short as possible");
+        systemPromptBuilder.AppendLine("-description MUST contain only relevant information");
+        systemPromptBuilder.AppendLine("-omit person's name in description");
+        systemPromptBuilder.AppendLine("REMEMBER description need to be as short as possible");
+        systemPromptBuilder.AppendLine("example###");
+        systemPromptBuilder.AppendLine("Wielu nie wie, ale ulubionym instrumentem muzycznym Zygfryda jest ukulele, na którym gra po nocach, kiedy kodowanie na dziś się skończy. = {\"type\":\"skill\",\"description\":\"gra na ulubionym instrumencie - ukulele\"}");
+        systemPromptBuilder.AppendLine("Kiedy zapytasz go o ulubioną grę planszową, Zygfryd bez wahania odpowie, że jest nią 'Terra Mystica'. = {\"type\":\"favorite\",\"description\":\"ulubiona gra plansowa to 'Terra Mystica'\"}");
+        systemPromptBuilder.AppendLine("Jako zawzięty fan piłki nożnej, Zygfryd nigdy nie przegapia meczu swojej ulubionej drużyny. = {\"type\":\"favorite\",\"description\":\"fan piłki nożnej, nie przegamia żadnych meczy\"}");
+        systemPromptBuilder.AppendLine("###");
+
+        var tasks = new List<Task<string>>();
+        foreach (var (key, values) in peoples)
+        {
+            tasks.Add(GetUserDescriptionAsync(service, linkedCts, systemPromptBuilder.ToString(), key, values));
+        }
+
+        var descriptions = await Task.WhenAll(tasks);
+        var result = string.Join("", descriptions);
+
+        var response = await client.SendAnswerAsync(token, result, linkedCts.Token);
+        return Results.Ok(response);
+    }
+
+    internal static async Task<IResult> GoogleTaskAsync(ITasksAiDevsClient client, IConfiguration configuration, CancellationToken cancellationToken)
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cts.Token);
+
+        var token = await client.GetTokenAsync("google", linkedCts.Token);
+
+        var response = await client.SendAnswerAsync(token, $"{configuration["OwnApiUrl"]}?id={Guid.NewGuid()}", linkedCts.Token);
+        return Results.Ok(response);
+    }
+
+    private static async Task<string> GetUserDescriptionAsync(IOpenAIService service, CancellationTokenSource linkedCts, string systemPrompt, string key, List<string> values)
+    {
+        var optimalDbBuilder = new StringBuilder();
+        optimalDbBuilder.AppendLine($"{key}###");
+        List<PersonDescription> personDescriptions = new List<PersonDescription>();
+        foreach (var value in values)
+        {
+            var result = await service.CompletionsAsync(systemPrompt, value, jsonObject: true, linkedCts.Token);
+            personDescriptions.Add(JsonSerializer.Deserialize<PersonDescription>(result, new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!);
+        }
+
+        var grouped = personDescriptions.GroupBy(x => x.Type, v => v.Description);
+
+        foreach (var group in grouped)
+        {
+            var systemPromptBuilder = new StringBuilder();
+            systemPromptBuilder.AppendLine("Write a SHORT summary in POLISH of information about the person.");
+            systemPromptBuilder.AppendLine($"The information concerns the type: {group.Key}");
+            systemPromptBuilder.AppendLine("It is IMPORTANT that the summary includes all information about the person.");
+            var summary = await service.CompletionsAsync(systemPromptBuilder.ToString(), string.Join("\n", group), cancellationToken: linkedCts.Token);
+            optimalDbBuilder.AppendLine($"{group.Key}: {summary}");
+        }
+
+        optimalDbBuilder.AppendLine("###");
+        return optimalDbBuilder.ToString();
     }
 
     private static async Task<string> GetHintAsync(ITasksAiDevsClient client, string token, CancellationToken ct)
@@ -554,7 +641,7 @@ internal static class TaskModule
         var answer = await service.CompletionsAsync(
             system,
             $"Guess who I'm thinking of, here are the hints:\n{string.Join("\n-", hints)}",
-            cancellationToken);
+            cancellationToken: cancellationToken);
 
         if (answer.Equals("NEED MORE HINTS", StringComparison.OrdinalIgnoreCase))
         {
@@ -569,3 +656,4 @@ internal static class TaskModule
 }
 public record PersonCategory(string imie, string nazwisko, string question);
 public record ActionToDo(string tool, string desc, string date);
+public sealed record PersonDescription(string Type, string Description);

@@ -11,6 +11,7 @@
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
     <PackageVersion Include="Microsoft.SemanticKernel" Version="1.7.1" />
     <PackageVersion Include="NSubstitute" Version="5.1.0" />
+    <PackageVersion Include="PuppeteerSharp" Version="16.0.0" />
     <PackageVersion Include="Refit.HttpClientFactory" Version="7.0.0" />
     <PackageVersion Include="RichardSzalay.MockHttp" Version="7.0.0" />
     <PackageVersion Include="Serilog.AspNetCore" Version="8.0.1" />

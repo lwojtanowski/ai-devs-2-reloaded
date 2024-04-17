@@ -31,7 +31,7 @@ namespace AiDevs2Reloaded.Api.Modules
                             writer.WriteLine(publicRequest.question);
                         }
 
-                        return Results.Ok(new PublicResponse<string>("OK. Thx for the info."));
+                        return Results.Ok(new PublicResponse("OK. Thx for the info."));
                     }
 
                     if (File.Exists($"{id}.txt"))
@@ -42,15 +42,16 @@ namespace AiDevs2Reloaded.Api.Modules
 
                 logger.LogInformation("User CONTEXT: {Context}", context);
                 string reply = await QuestionAgent(service, publicRequest.question, context, cancellationToken: cancellationToken);
-
-                return Results.Ok(new PublicResponse<string>(reply));
+                var response = new PublicResponse(reply);
+                logger.LogInformation("Response from Public api: {Response}", response);
+                return Results.Ok(response);
             }
             catch (Exception ex)
             {
                 logger.LogError(ex, "Error while processing request");
             }
 
-            return Results.BadRequest(new PublicResponse<string>("Invalid request body"));
+            return Results.BadRequest(new PublicResponse("Invalid request body"));
         }
 
         private static async Task<string> ActionAgent(IOpenAIService service, string input, CancellationToken cancellationToken = default)
@@ -62,9 +63,10 @@ namespace AiDevs2Reloaded.Api.Modules
             systemPromptBuilder.AppendLine("example###");
             systemPromptBuilder.AppendLine("I'm living in Berlin = MEMORY");
             systemPromptBuilder.AppendLine("What is the capital of Poland? = QUESTION");
+            systemPromptBuilder.AppendLine("Searh for website address of Jon Doe? = QUESTION");
             systemPromptBuilder.AppendLine("###");
 
-            var action = await service.CompletionsAsync(systemPromptBuilder.ToString(), input, cancellationToken);
+            var action = await service.CompletionsAsync(systemPromptBuilder.ToString(), input, cancellationToken: cancellationToken);
             return action;
         }
 
@@ -74,6 +76,7 @@ namespace AiDevs2Reloaded.Api.Modules
             systemPromptBuilder.AppendLine("Answer for user question.");
             systemPromptBuilder.AppendLine("If you don't know answer answer: I don't know");
             systemPromptBuilder.AppendLine("REMEMBER to use context when answering questions about the user!");
+            systemPromptBuilder.AppendLine("If question is about url use tool searchInWeb");
             if (!string.IsNullOrEmpty(context))
             {
                 systemPromptBuilder.AppendLine("context###");
@@ -81,11 +84,11 @@ namespace AiDevs2Reloaded.Api.Modules
                 systemPromptBuilder.AppendLine("###");
             }
 
-            var reply = await service.CompletionsAsync(systemPromptBuilder.ToString(), question, cancellationToken);
+            var reply = await service.CompletionsWithToolAsync(systemPromptBuilder.ToString(), question, cancellationToken: cancellationToken);
             return reply;
         }
 
-        private sealed record PublicResponse<T>(T reply);
+        private sealed record PublicResponse(string reply);
         private sealed record PublicRequest(string question);
     }
 

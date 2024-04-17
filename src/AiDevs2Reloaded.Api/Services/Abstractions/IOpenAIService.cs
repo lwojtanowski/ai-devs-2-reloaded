@@ -10,6 +10,7 @@ public interface IOpenAIService
     Task<IReadOnlyList<EmbeddingItem>> EmbeddingAsync(List<string> input, CancellationToken cancellationToken = default);
     Task<string> AudioToSpeechAsync(Stream stream, CancellationToken cancellationToken = default);
     Task<string> AddUserAsync(string input, CancellationToken cancellationToken = default);
-    Task<string> CompletionsAsync(string system, string input, CancellationToken cancellationToken = default);
+    Task<string> CompletionsAsync(string system, string input, bool jsonObject = false, CancellationToken cancellationToken = default);
+    Task<string> CompletionsWithToolAsync(string system, string input, CancellationToken cancellationToken = default);
     Task<string> AnalyzeImageAsync(string system, string url, CancellationToken cancellationToken = default);
 }
